@@ -22,6 +22,7 @@ char2idx = {v: k for k, v in enumerate(chars)}
 TEXT_MAX_LEN = 201
 DEVICE = 'cuda'
 
+# Data set used for the model
 class Data_char(Dataset):
     def __init__(self, data, partition):
         self.data = data
@@ -32,7 +33,7 @@ class Data_char(Dataset):
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Resize((224, 224), antialias=True),
-            v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),)
+            v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)), )
 
     def __len__(self):
         return len(self.partition)
@@ -54,8 +55,9 @@ class Data_char(Dataset):
         gap = self.max_len - len(final_list)
         final_list.extend([chars[2]]*gap)
         cap_idx = [char2idx[i] for i in final_list]
-        return img, cap_idx
+        return img, torch.tensor(cap_idx)
 
+# Data set to perform statistics
 class Data_stats(Dataset):
     def __init__(self, data, partition):
         self.data = data

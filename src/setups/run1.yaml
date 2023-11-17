@@ -1,0 +1,27 @@
+## Configuration options to run train.py
+epochs: 100
+patience: 15
+
+model_name: "Baseline"
+lr: 0.001
+
+network: 
+  checkpoint: ~
+
+datasets: 
+  train: 
+    batch_size: 32
+    shuffle: True
+    num_workers: 2
+
+  valid:
+    batch_size: 35
+    shuffle: False
+    num_workers: 2
+
+  test:
+    batch_size: 35
+    shuffle: False
+    num_workers: 2
+
+

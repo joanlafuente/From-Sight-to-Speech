@@ -1,2 +1,7 @@
 src/Dataset/*
 *.pyc
+runs/*
+MSG_ERRORS/*
+wandb/*
+*.pth
+*.png

@@ -2,7 +2,10 @@ import yaml
 import os
 import torch
 import evaluate
-from train import bleu, rouge, meteor
+
+bleu = evaluate.load('bleu')
+meteor = evaluate.load('meteor')
+rouge = evaluate.load('rouge')
 
 def load_model(model_name, classes=None):
     pass
@@ -22,18 +25,18 @@ def createDir(dir_name):
         os.makedirs(dir_name)
 
 def LoadConfig(test_name):
-    with open("/fhome/gia07/project/setups/" + test_name + ".yaml") as f:
+    with open("/fhome/gia07/Image_captioning/src/setups/" + test_name + ".yaml") as f:
         opt = yaml.load(f, Loader=yaml.FullLoader)
     opt[test_name] = test_name
-    opt["output_dir"] = "/fhome/gia07/project/runs/" + test_name + "/images/"
-    opt["weights_dir"] = "/fhome/gia07/project/runs/" + test_name + "/weights/"
-    opt["root_dir"] = "/fhome/gia07/project/runs/" + test_name + "/"
+    opt["output_dir"] = "/fhome/gia07/Image_captioning/src/runs/" + test_name + "/images/"
+    opt["weights_dir"] = "/fhome/gia07/Image_captioning/src/runs/" + test_name + "/weights/"
+    opt["root_dir"] = "/fhome/gia07/Image_captioning/src/runs/" + test_name + "/"
 
     createDir(opt["root_dir"])
     createDir(opt["weights_dir"])
     createDir(opt["output_dir"])
 
-    opt["network"]["checkpoint"] = opt["network"].get("checkpoint", None)
+    # opt["network"]["checkpoint"] = opt["network"].get("checkpoint", None)
 
     return opt
 
@@ -51,10 +54,19 @@ def get_weights(weights_path):
 
     return weights_path + path2load
 
-def metrics_evaluation(pred, ref):
-    bleu1 = bleu.compute(predictions=pred, references=ref, max_order=1)
-    bleu2 = bleu.compute(predictions=pred, references=ref, max_order=2)
-    res_r = rouge.compute(predictions=pred, references=ref)
-    res_m = meteor.compute(predictions=pred, references=ref)
+# def metrics_evaluation(pred, ref):
+#     bleu1 = bleu.compute(predictions=pred, references=ref, max_order=1)
+#     bleu2 = bleu.compute(predictions=pred, references=ref, max_order=2)
+#     res_r = rouge.compute(predictions=pred, references=ref)
+#     res_m = meteor.compute(predictions=pred, references=ref)
 
-    print(f"BLEU-1:{bleu1['bleu']*100:.1f}%, BLEU2:{bleu2['bleu']*100:.1f}%, ROUGE-L:{res_r['rougeL']*100:.1f}%, METEOR:{res_m['meteor']*100:.1f}%")
+#     print(f"BLEU-1:{bleu1['bleu']*100:.1f}%, BLEU2:{bleu2['bleu']*100:.1f}%, ROUGE-L:{res_r['rougeL']*100:.1f}%, METEOR:{res_m['meteor']*100:.1f}%")
+
+def metrics_evaluation(pred, ref):
+    metrics = {}
+    metrics["bleu1"] = bleu.compute(predictions=pred, references=ref, max_order=1)["bleu"]
+    metrics["bleu2"] = bleu.compute(predictions=pred, references=ref, max_order=2)["bleu"]
+    metrics["rougeL"] = rouge.compute(predictions=pred, references=ref)["rougeL"]
+    metrics["meteor"] = meteor.compute(predictions=pred, references=ref)["meteor"]
+    return metrics
+    
