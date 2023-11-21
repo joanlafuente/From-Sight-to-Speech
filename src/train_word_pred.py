@@ -5,21 +5,36 @@ from torchvision import transforms as T
 from torchvision.utils import save_image
 import wandb
 from tqdm import tqdm
-import evaluate
 import pandas as pd
 import numpy as np
 import os
 from torchvision.transforms import v2
+import random
 
 
-from data_utils.dataset import Data_char
+from data_utils.dataset import Data_word
 from data_utils.utils import LoadConfig, metrics_evaluation
 from Models.baseline import Baseline
+from Models.word_predictor import image_to_word, image_to_word_tf
 
-chars = ['<SOS>', '<EOS>', '<PAD>', ' ', '!', '"', '#', '&', "'", '(', ')', ',', '-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '=', '?', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
-NUM_CHAR = len(chars)
-idx2char = {k: v for k, v in enumerate(chars)}
-char2idx = {v: k for k, v in enumerate(chars)}
+
+base_path = '/fhome/gia07/Image_captioning/src/Dataset/'
+cap_path = f'{base_path}captions.txt'
+data = pd.read_csv(cap_path)
+
+# Unique words in the dataset
+unique_words = set()
+captions = data.caption.apply(lambda x: x.lower()).values
+for i in range(len(data)):
+    caption = captions[i]
+    caption = caption.split()
+    unique_words.update(caption)
+
+unique_words = ['<SOS>', '<EOS>', '<PAD>'] + list(unique_words)
+NUM_WORDS = len(unique_words)
+idx2word = {k: v for k, v in enumerate(unique_words)}
+word2idx = {v: k for k, v in enumerate(unique_words)}
+TOTAL_MAX_WORDS = 38
 
 def train_one_epoch(model, optimizer, crit, metric, dataloader):
     loss = 0
@@ -31,32 +46,33 @@ def train_one_epoch(model, optimizer, crit, metric, dataloader):
         # load it to the active device
         img = img.to(device)
         cap_idx = cap_idx.to(device) # batch, seq
-        outputs = model(img) # batch, 80, seq
-
-        train_loss = crit(outputs, cap_idx)
+        outputs = model(img) # batch, posible_options, seq
+        
         optimizer.zero_grad()
+        train_loss = crit(outputs, cap_idx)
         train_loss.backward()
         optimizer.step()
         
         # add the mini-batch training loss to epoch loss
         loss += train_loss.item()
-        # wandb.log({"Train Loss": train_loss.item()})
-        # Log loss to wandb every 3 batches
+
         if i % 3 == 0:
             wandb.log({"Train Loss": train_loss.item()}, step = len(dataloader)*len(img)*(epoch)+i*len(img))
-        prob, preds = torch.max(outputs, dim=1)
-        # preds = preds.permute(1, 0)
+        
+        _, preds = torch.max(outputs, dim=1)
+
         preds = preds.cpu().numpy()
         cap_idx = cap_idx.cpu().numpy()
-        for i in range(len(preds)):
-            pred = preds[i]
-            ref = cap_idx[i]
-            pred = [idx2char[j] for j in pred if j not in (0, 1, 2)]
-            ref = [idx2char[j] for j in ref if j not in (0, 1, 2)]
-            pred = ''.join(pred)
-            ref = ''.join(ref)
-            list_pred.append(pred)
-            list_ref.append(ref)
+
+        preds = [' '.join([idx2word[word] for word in pred if word not in (0, 1, 2)])
+                 for pred in preds]
+        
+        cap_idx = [' '.join([idx2word[word] for word in pred if word not in (0, 1, 2)])
+                 for pred in cap_idx]
+        
+        list_pred.extend(preds)
+        list_ref.extend(cap_idx)
+
     res = metrics_evaluation(list_pred, list_ref)
 
     return loss/len(dataloader), res
@@ -75,19 +91,21 @@ def eval_epoch(model, crit, metric, dataloader):
             val_loss = crit(outputs, cap_idx)
             loss += val_loss.item()
 
-            prob, preds = torch.max(outputs, dim=1)
+            _, preds = torch.max(outputs, dim=1)
             # preds = preds.permute(1, 0)
             preds = preds.cpu().numpy()
             cap_idx = cap_idx.cpu().numpy()
-            for i in range(len(preds)):
-                pred = preds[i]
-                ref = cap_idx[i]
-                pred = [idx2char[j] for j in pred if j not in (0, 1, 2)]
-                ref = [idx2char[j] for j in ref if j not in (0, 1, 2)]
-                pred = ''.join(pred)
-                ref = ''.join(ref)
-                list_pred.append(pred)
-                list_ref.append(ref)
+            
+            preds = [' '.join([idx2word[word] for word in pred if word not in (0, 1, 2)])
+                for pred in preds]
+            cap_idx = [' '.join([idx2word[word] for word in cap_idx if word not in (0, 1, 2)])]
+            # Si utilitzem totes les captions
+            # cap_idx = [[' '.join([idx2word[word] for word in pred if word not in (0, 1, 2)])
+            #            for pred in sample] for sample in captions]
+
+            list_pred.extend(preds)
+            list_ref.extend(cap_idx)
+
     res = metrics_evaluation(list_pred, list_ref)
 
     # Save the last 5 images and the predicted captions
@@ -99,10 +117,10 @@ def eval_epoch(model, crit, metric, dataloader):
         image = img[-i].cpu()
         # De normalize the image
         image = transform(image)
-        save_image(image, f'{config["output_dir"]}Epoch_{epoch}/Caption_{list_pred[-i]}_{i}.png')
+        pred = list_pred[-i]
+        save_image(image, f'{config["output_dir"]}Epoch_{epoch}/Caption_{pred}_{i}.png')
+    
     return loss/len(dataloader), res
-
-
 
 
 if __name__ == '__main__':
@@ -110,7 +128,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_name', type=str, default='run1')
     args = parser.parse_args()
     config = LoadConfig(args.test_name)
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     base_path = '/fhome/gia07/Image_captioning/src/Dataset/'
     img_path = f'{base_path}Images/'
@@ -119,25 +137,22 @@ if __name__ == '__main__':
     data = pd.read_csv(cap_path)
 
     best_val_loss = float('inf')
-    TEXT_MAX_LEN = 201
 
     partitions = np.load(path_partitions, allow_pickle=True).item()
-    # config = {"lr":0.001, "weights_dir":"/fhome/gia07/Image_captioning/Test_weights", 
-    #           "epochs":10, "datasets":{"train":{"batch_size":32, "shuffle":True, "num_workers":4}}
-    #         }
     metric = metrics_evaluation
-    with wandb.init(project='test', config=config, name=args.test_name) as run:
-        dataset_train = Data_char(data, partitions['train'])
-        # Get only a 1% of the dataset to test if the model is able to overfit
-        # dataset_train, _ = torch.utils.data.random_split(dataset_train, [int(len(dataset_train)*0.005), len(dataset_train)-int(len(dataset_train)*0.005)])
+    with wandb.init(project='Image_Captioning', config=config, name=args.test_name) as run:
+        # Train
+        dataset_train = Data_word(data, partitions['train'])
         dataloader_train = torch.utils.data.DataLoader(dataset_train, **config["datasets"]["train"])
-        dataset_valid = Data_char(data, partitions['valid'])
-        # Get only a 1% of the dataset to test if the model is able to overfit
-        # dataset_valid, _ = torch.utils.data.random_split(dataset_valid, [int(len(dataset_valid)*0.01), len(dataset_valid)-int(len(dataset_valid)*0.01)])
+        # Val
+        dataset_valid = Data_word(data, partitions['valid'])
         dataloader_valid = torch.utils.data.DataLoader(dataset_valid, **config["datasets"]["valid"])
-        dataset_test = Data_char(data, partitions['test'])
+        # Test
+        dataset_test = Data_word(data, partitions['test'])
         dataloader_test = torch.utils.data.DataLoader(dataset_test, **config["datasets"]["test"])
-        model = Baseline(TEXT_MAX_LEN, device).to(device)
+        
+        model = image_to_word(TOTAL_MAX_WORDS, device).to(device)
+
         wandb.watch(model)
         model.train()
         optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'])
@@ -161,14 +176,14 @@ if __name__ == '__main__':
                 torch.save(model.state_dict(), f'{config["weights_dir"]}/{epoch}.pth')    
             if counter >= config["patience"]:
                 break
-    
-        weights = os.listdir(config["weights_dir"])
-        epoch_best = max([int(i.split('.')[0]) for i in weights])
-        
-        #epoch_best = weights[:-1].split('.')[0] # Tambe aixi val
 
-        model.load_state_dict(torch.load(f'{config["weights_dir"]}/{epoch_best}.pth'))
-        loss_t, res_t = eval_epoch(model, crit, metric, dataloader_test)
-        wandb.log({"Test Loss": loss_t, "Test": res_t}, step=(epoch+1)*len(dataloader_train)*config["datasets"]["train"]['batch_size'])
-        print(f'Test loss: {loss_t:.2f}')
-        print(f'Test: {res_t}')
+    weights = os.listdir(config["weights_dir"])
+    epoch_best = max([int(i.split('.')[0]) for i in weights])
+    
+    #epoch_best = weights[:-1].split('.')[0] # Tambe aixi val
+
+    model.load_state_dict(torch.load(f'{config["weights_dir"]}/{epoch_best}.pth'))
+    loss_t, res_t = eval_epoch(model, crit, metric, dataloader_test)
+    wandb.log({"Test Loss": loss_t, "Test": res_t}, step=(epoch+1)*len(dataloader_train)*config["datasets"]["train"]['batch_size'])
+    print(f'Test loss: {loss_t:.2f}')
+    print(f'Test: {res_t}')

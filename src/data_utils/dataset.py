@@ -22,6 +22,20 @@ char2idx = {v: k for k, v in enumerate(chars)}
 TEXT_MAX_LEN = 201
 DEVICE = 'cuda'
 
+# Unique words in the dataset
+unique_words = set()
+captions = data.caption.apply(lambda x: x.lower()).values
+for i in range(len(data)):
+    caption = captions[i]
+    caption = caption.split()
+    unique_words.update(caption)
+
+NUM_WORDS = len(unique_words)
+unique_words = ['<SOS>', '<EOS>', '<PAD>'] + list(unique_words)
+idx2word = {k: v for k, v in enumerate(unique_words)}
+word2idx = {v: k for k, v in enumerate(unique_words)}
+TOTAL_MAX_WORDS = 38
+
 # Data set used for the model
 class Data_char(Dataset):
     def __init__(self, data, partition):
@@ -57,7 +71,56 @@ class Data_char(Dataset):
         cap_idx = [char2idx[i] for i in final_list]
         return img, torch.tensor(cap_idx)
 
-# Data set to perform statistics
+
+class Data_word(Dataset):
+    def __init__(self, data, partition, train=True):
+        self.data = data
+        self.data['caption'] = self.data['caption'].apply(lambda x: x.lower())
+
+        self.partition = partition
+        self.num_captions = 5
+        self.max_len = TOTAL_MAX_WORDS
+        self.img_proc = torch.nn.Sequential(
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Resize((224, 224), antialias=True),
+            v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)), )
+        self.train = train
+        
+    def __len__(self):
+        return len(self.partition)
+    
+    def __getitem__(self, idx):
+        real_idx = self.num_captions*self.partition[idx]
+        item = self.data.iloc[real_idx: real_idx+self.num_captions]
+        ## image processing
+        img_name = item.image.reset_index(drop=True)[0]
+        img = Image.open(f'{img_path}{img_name}').convert('RGB')
+        img = self.img_proc(img)
+        ## caption processing
+        if self.train:
+            caption = item.caption.reset_index(drop=True)[random.choice(list(range(self.num_captions)))]
+            cap_list = caption.split()
+            final_list = [chars[0]] + cap_list + [chars[1]]
+            gap = self.max_len - len(final_list)
+            final_list.extend([chars[2]]*gap)
+            cap_idx = [word2idx[i] for i in final_list]
+            return img, torch.tensor(cap_idx)
+    
+        else: # Validation and test -> return all captions
+            captions = item.caption.reset_index(drop=True)
+            cap_idx = []
+            for cap in captions:
+                cap_list = cap.split()
+                final_list = [chars[0]] + cap_list + [chars[1]]
+                gap = self.max_len - len(final_list)
+                final_list.extend([chars[2]]*gap)
+                cap_idx.append([word2idx[i] for i in final_list])
+            
+            return img, torch.tensor(cap_idx)
+
+
+# Dataset to perform statistics
 class Data_stats(Dataset):
     def __init__(self, data, partition):
         self.data = data
@@ -92,9 +155,10 @@ class Data_stats(Dataset):
         cap_idx = [char2idx[i] for i in final_list]
 
         # Tokenize captions per word
-        list_of_words = []
-        for word in caption.split():
-            list_of_words.append(word)
+        #list_of_words = []
+        #for word in caption.split():
+        #    list_of_words.append(word)
+        list_of_words = caption.split()
         return img, cap_idx, list_of_words
     
 def get_loader_stats(partition, config):
@@ -103,3 +167,4 @@ def get_loader_stats(partition, config):
                                          batch_size = config[partition]['batch_size'], 
                                          shuffle    = config[partition]['shuffle'])
     return loader
+

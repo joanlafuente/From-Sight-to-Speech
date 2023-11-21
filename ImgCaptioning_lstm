@@ -9,9 +9,5 @@
 #SBATCH -e %x_%u_%j.err # File to which STDERR will be written
 #SBATCH --gres gpu:1 # Para pedir gráficas
 
-
-#python3 /fhome/gia07/Image_captioning/src/train.py --test_name $1
-#python3 /fhome/gia07/Image_captioning/src/train_word_pred.py --test_name $1
-python3 /fhome/gia07/Image_captioning/src/train_teacher_forcing.py --test_name $1
-#python3 /fhome/gia07/Image_captioning/src/train_tf.py --test_name $1
-# python3 /fhome/gia07/Image_captioning/src/gru_2_layers_tf.py --test_name $1
+# Es el mateix que el altre pero per lo del lstm per si algu estaba provant algo
+python3 /fhome/gia07/Image_captioning/src/lstm_train.py --test_name $1

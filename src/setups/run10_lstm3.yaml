@@ -1,0 +1,35 @@
+## Configuration options to run train.py
+epochs: 100
+patience: 100
+
+model_name: "Word_level_predictor"
+lr: 0.1
+teacher_forcing_ratio: 1
+scheduler: "CosineAnnealingWarmRestarts"
+eta_min: 0.05
+T_m: 1
+T_0: 50
+
+network: 
+  checkpoint: ~
+
+datasets: 
+  train: 
+    batch_size: 128
+    shuffle: True
+    num_workers: 2
+
+  valid:
+    batch_size: 130
+    shuffle: True
+    num_workers: 2
+
+  test:
+    batch_size: 130
+    shuffle: False
+    num_workers: 2
+
+
+wandb: False
+  # resume: None
+  # id: qu3tryju

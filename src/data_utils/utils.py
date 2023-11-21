@@ -10,6 +10,23 @@ rouge = evaluate.load('rouge')
 def load_model(model_name, classes=None):
     pass
 
+def get_scheduler(config, optimizer):
+
+    if config['scheduler'] == 'ReduceOnPlateu':
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, verbose=True)
+    
+    elif config['scheduler'] == 'StepLR':
+        return torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    
+    elif config['scheduler'] == 'CosineAnnealingLR':
+        return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config['T_max'], eta_min=config['eta_min'])
+    
+    elif config['scheduler'] == 'CosineAnnealingWarmRestarts':
+        return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0 = config['T_0'], T_mult=config['T_m'], eta_min=config['eta_min'])
+    
+    else:
+        raise Exception("Scheduler not found")
+
 def get_optimer(optimizer_name, model, lr):
     if optimizer_name == 'ADAM':
         return torch.optim.Adam(model.parameters(), lr=lr)
@@ -46,21 +63,14 @@ def get_weights(weights_path):
         if path[-4:] == ".pth":
             if path2load == None: 
                 path2load = path
-            elif int(path.split("epoch_")[1].split(".")[0]) > int(path2load.split("epoch_")[1].split(".")[0]):        
+            elif int(path.split(".")[0]) > int(path2load.split(".")[0]):        
                 path2load = path
     if path2load == None: 
         print("No weights found")
         return None
 
+    print("Loading weights: ", path2load)
     return weights_path + path2load
-
-# def metrics_evaluation(pred, ref):
-#     bleu1 = bleu.compute(predictions=pred, references=ref, max_order=1)
-#     bleu2 = bleu.compute(predictions=pred, references=ref, max_order=2)
-#     res_r = rouge.compute(predictions=pred, references=ref)
-#     res_m = meteor.compute(predictions=pred, references=ref)
-
-#     print(f"BLEU-1:{bleu1['bleu']*100:.1f}%, BLEU2:{bleu2['bleu']*100:.1f}%, ROUGE-L:{res_r['rougeL']*100:.1f}%, METEOR:{res_m['meteor']*100:.1f}%")
 
 def metrics_evaluation(pred, ref):
     metrics = {}

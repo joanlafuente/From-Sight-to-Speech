@@ -2,7 +2,7 @@
 epochs: 50
 patience: 7
 
-model_name: "Baseline"
+model_name: "Word_level_predictor"
 lr: 0.000005
 
 network: 

@@ -1,22 +1,22 @@
 ## Configuration options to run train.py
 epochs: 50
-patience: 7
+patience: 10
 
-model_name: "Baseline"
-lr: 0.000005
+model_name: "Word_level_predictor_teacherforcing_prova"
+lr: 0.00005
 
 network: 
   checkpoint: ~
 
 datasets: 
   train: 
-    batch_size: 32
+    batch_size: 64
     shuffle: True
     num_workers: 2
 
   valid:
     batch_size: 35
-    shuffle: False
+    shuffle: True
     num_workers: 2
 
   test:

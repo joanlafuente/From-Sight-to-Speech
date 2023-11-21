@@ -13,8 +13,8 @@ from torchvision.transforms import v2
 
 
 from data_utils.dataset import Data_char
-from data_utils.utils import LoadConfig, metrics_evaluation
-from Models.baseline import Baseline
+from data_utils.utils import LoadConfig, metrics_evaluation, get_scheduler
+from Models.baseline_tf import Baseline
 
 chars = ['<SOS>', '<EOS>', '<PAD>', ' ', '!', '"', '#', '&', "'", '(', ')', ',', '-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '=', '?', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
 NUM_CHAR = len(chars)
@@ -31,21 +31,26 @@ def train_one_epoch(model, optimizer, crit, metric, dataloader):
         # load it to the active device
         img = img.to(device)
         cap_idx = cap_idx.to(device) # batch, seq
-        outputs = model(img) # batch, 80, seq
+        outputs = model(img, cap_idx) # batch, 80, seq
+        outputs = outputs.argmax(dim=1) # batch, seq
 
-        train_loss = crit(outputs, cap_idx)
+        # Reshape cap_idx to be 1D
+        cap_idx = cap_idx.view(-1)
+
+        train_loss = crit(outputs.float(), cap_idx.float())  # Convert cap_idx to float32
         optimizer.zero_grad()
         train_loss.backward()
         optimizer.step()
-        
+
         # add the mini-batch training loss to epoch loss
         loss += train_loss.item()
         # wandb.log({"Train Loss": train_loss.item()})
         # Log loss to wandb every 3 batches
         if i % 3 == 0:
             wandb.log({"Train Loss": train_loss.item()}, step = len(dataloader)*len(img)*(epoch)+i*len(img))
-        prob, preds = torch.max(outputs, dim=1)
+        # prob, preds = torch.max(outputs, dim=1)
         # preds = preds.permute(1, 0)
+        preds = outputs
         preds = preds.cpu().numpy()
         cap_idx = cap_idx.cpu().numpy()
         for i in range(len(preds)):
@@ -70,13 +75,15 @@ def eval_epoch(model, crit, metric, dataloader):
         for img, cap_idx in tqdm(dataloader):
             img = img.to(device)
             cap_idx = cap_idx.to(device)
-            outputs = model(img)
+            outputs = model(img, cap_idx)
+            outputs = outputs.argmax(dim=1) # batch, seq
 
-            val_loss = crit(outputs, cap_idx)
+            val_loss = crit(outputs, cap_idx.float())  # Convert cap_idx to float32
             loss += val_loss.item()
 
-            prob, preds = torch.max(outputs, dim=1)
+            # prob, preds = torch.max(outputs, dim=1)
             # preds = preds.permute(1, 0)
+            preds = outputs
             preds = preds.cpu().numpy()
             cap_idx = cap_idx.cpu().numpy()
             for i in range(len(preds)):
@@ -122,6 +129,9 @@ if __name__ == '__main__':
     TEXT_MAX_LEN = 201
 
     partitions = np.load(path_partitions, allow_pickle=True).item()
+    partitions['train'] = partitions['train'][:int(len(partitions['train'])*0.01)]
+    partitions['valid'] = partitions['valid'][:int(len(partitions['valid'])*0.01)]
+    partitions['test'] = partitions['test'][:int(len(partitions['test'])*0.01)]
     # config = {"lr":0.001, "weights_dir":"/fhome/gia07/Image_captioning/Test_weights", 
     #           "epochs":10, "datasets":{"train":{"batch_size":32, "shuffle":True, "num_workers":4}}
     #         }
@@ -144,14 +154,14 @@ if __name__ == '__main__':
         crit = nn.CrossEntropyLoss()
         metric = "metrics_evaluation"
         counter = 0
-        squeduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True)
+        squeduler = get_scheduler(config, optimizer)
         for epoch in range(config["epochs"]):
             loss, res = train_one_epoch(model, optimizer, crit, metric, dataloader_train)
             print(f'train loss: {loss:.2f}, epoch: {epoch}')
             loss_v, res_v = eval_epoch(model, crit, metric, dataloader_valid)
             print(f'valid loss: {loss:.2f}')
             wandb.log({"Epoch Train Loss": loss, "Epoch Validation Loss": loss_v, "epoch":epoch+1}, step=(epoch+1)*len(dataloader_train)*config["datasets"]["train"]['batch_size'])
-            wandb.log({"Train": res, "Validation": res_v, "epoch":epoch+1}, step=(epoch+1)*len(dataloader_train)*config["datasets"]["train"]['batch_size'])
+            wandb.log({"Train": res, "Validation": res_v, "epoch":epoch+1, "lr":squeduler.get_lr}, step=(epoch+1)*len(dataloader_train)*config["datasets"]["train"]['batch_size'])
             squeduler.step(loss_v)
             counter += 1
             if loss_v < best_val_loss:
