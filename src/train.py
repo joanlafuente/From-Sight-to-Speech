@@ -10,10 +10,11 @@ import pandas as pd
 import numpy as np
 import os
 from torchvision.transforms import v2
+from data_utils.losses import *    
 
 
 from data_utils.dataset import Data_char
-from data_utils.utils import LoadConfig, metrics_evaluation
+from data_utils.utils import LoadConfig, metrics_evaluation, get_loss
 from Models.baseline import Baseline
 
 chars = ['<SOS>', '<EOS>', '<PAD>', ' ', '!', '"', '#', '&', "'", '(', ')', ',', '-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '=', '?', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
@@ -141,7 +142,7 @@ if __name__ == '__main__':
         wandb.watch(model)
         model.train()
         optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'])
-        crit = nn.CrossEntropyLoss()
+        crit = get_loss(config["loss"])
         metric = "metrics_evaluation"
         counter = 0
         squeduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True)

@@ -1,0 +1,36 @@
+## Configuration options to run train.py
+epochs: 200
+patience: 200
+
+model_name: "Word_level_predictor"
+lr: 0.001
+teacher_forcing_ratio: 0
+scheduler: "MultiStepLR"
+gamma: 0.1
+epoch_freeze: 75
+freeze: True
+milestones: [50, 75, 90, 150]
+
+network: 
+  checkpoint: ~
+
+datasets: 
+  train: 
+    batch_size: 64
+    shuffle: True
+    num_workers: 2
+
+  valid:
+    batch_size: 130
+    shuffle: True
+    num_workers: 2
+
+  test:
+    batch_size: 130
+    shuffle: False
+    num_workers: 2
+
+
+wandb: False
+  # resume: None
+  # id: qu3tryju

@@ -4,7 +4,6 @@ cap_path = f'{base_path}captions.txt'
 
 data = pd.read_csv(cap_path)
 
-
 print(max(data.caption.apply(lambda x: x.split()).values, key=len).__len__())
 exit(0)
 unique_words = set()

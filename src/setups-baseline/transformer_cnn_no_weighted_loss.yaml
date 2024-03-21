@@ -1,0 +1,54 @@
+epochs: 50
+# lr: 0.001
+
+network: 
+  checkpoint: ~                   # path to checkpoint or ~
+  
+  freeze_encoder: True           # True, False
+  epoch2unfreeze: 35            # epoch to unfreeze encoder
+  save_ckpt_every: 3
+
+  params: 
+    type: "cnn_transformer"  # Bl_gru, Bl_lstm <- de moment aixo (gru_attention, lstm_attention...)
+    teacher_forcing_ratio: 1      # number between 0 and 1
+    dropout: 0.1                    # number between 0 and 1
+    text_max_len: 38         # max number of chr/words in a sentence
+    transformer_layers: 3            # number of transformer layers
+    transformer_heads: 8             # number of transformer heads                
+scheduler: 
+  type: MultiStepLR                         # MultiStepLR or ~     
+  milestones: [40, 75, 120, 160]        # milestones for MultiStepLR
+  gamma: 0.1                      # gamma for MultiStepLR
+
+loss: 
+  type: "CrossEntropyLoss"         # CrossEntropyLoss, NLLLoss
+  weights: False
+
+optimizer: 
+  type: "Adam"                     # Adam, SGD
+  weight_decay: 0.0001
+  lr: 0.0001
+
+early_stopping:
+  metric: "bleu2"                 # loss, bleu, rouge
+  patience: 250                    # number of epochs to wait before early stopping
+
+datasets:
+  type: Data_word_1cap                 # Data_char, Data_word
+  base_path: '/fhome/gia07/Image_captioning/src/Dataset/'
+  augment_imgs: True
+
+  train:
+    batch_size: 64
+    shuffle: True
+    num_workers: 2
+
+  valid:
+    batch_size: 64
+    shuffle: True
+    num_workers: 2
+
+  test:
+    batch_size: 64
+    shuffle: False
+    num_workers: 2

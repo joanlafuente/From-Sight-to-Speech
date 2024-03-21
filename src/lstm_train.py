@@ -12,9 +12,10 @@ from torchvision.transforms import v2
 import random
 
 
-from data_utils.dataset import Data_word
+from data_utils.dataset import Data_word, Data_word_aug
 from data_utils.utils import LoadConfig, metrics_evaluation, get_scheduler, get_weights
-from Models.lstm_word_predictor import Teacher_img_to_word_LSTM
+# from Models.freeze_resnet import Teacher_img_to_word_LSTM
+from Models.lstm_attention2 import LSTM_attention
 
 base_path = '/fhome/gia07/Image_captioning/src/Dataset/'
 cap_path = f'{base_path}captions.txt'
@@ -28,7 +29,7 @@ for i in range(len(data)):
     caption = caption.split()
     unique_words.update(caption)
 
-unique_words = ['<SOS>', '<EOS>', '<PAD>'] + list(unique_words)
+unique_words = ['<SOS>', '<EOS>', '<PAD>'] + sorted(list(unique_words))
 NUM_WORDS = len(unique_words)
 idx2word = {k: v for k, v in enumerate(unique_words)}
 word2idx = {v: k for k, v in enumerate(unique_words)}
@@ -72,7 +73,19 @@ def train_one_epoch(model, optimizer, crit, metric, dataloader):
         list_ref.extend(cap_idx)
 
     res = metrics_evaluation(list_pred, list_ref)
-
+    os.makedirs(f"{config['train_output_dir']}Epoch_{epoch}", exist_ok=True)
+    # Trransform to do an inverse normalitzation of the image
+    transform = v2.Compose([v2.Normalize(mean=[-0.485/0.229, -0.456/0.224, -0.406/0.255],
+                                        std=[1/0.229, 1/0.224, 1/0.255])])
+    for i in range(5):
+        image = img[-i].cpu()
+        # De normalize the image
+        image = transform(image)
+        pred = list_pred[-i]
+        try:
+            save_image(image, f'{config["train_output_dir"]}Epoch_{epoch}/Caption_{pred}_{i}.png')
+        except:
+            print("Error saving image")
     return loss/len(dataloader), res
 
 def eval_epoch(model, crit, metric, dataloader, epoch=0):
@@ -104,7 +117,9 @@ def eval_epoch(model, crit, metric, dataloader, epoch=0):
             list_ref.extend(cap_idx)
 
     res = metrics_evaluation(list_pred, list_ref)
-
+    if epoch == config.get('epoch_freeze', None):
+        print("Unfreeze the model")
+        model.unfreeze_params(True)
     # Save the last 5 images and the predicted captions
     os.makedirs(f"{config['output_dir']}Epoch_{epoch}", exist_ok=True)
     # Trransform to do an inverse normalitzation of the image
@@ -115,13 +130,16 @@ def eval_epoch(model, crit, metric, dataloader, epoch=0):
         # De normalize the image
         image = transform(image)
         pred = list_pred[-i]
-        save_image(image, f'{config["output_dir"]}Epoch_{epoch}/Caption_{pred}_{i}.png')
+        try:
+            save_image(image, f'{config["output_dir"]}Epoch_{epoch}/Caption_{pred}_{i}.png')
+        except:
+            print("Error saving image")
     
     return loss/len(dataloader), res
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--test_name', type=str, default='run10_lstm3')
+    parser.add_argument('--test_name', type=str, default='test_attention')
     args = parser.parse_args()
     config = LoadConfig(args.test_name)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -132,7 +150,7 @@ if __name__ == '__main__':
     path_partitions = f'{base_path}flickr8k_partitions.npy'
     data = pd.read_csv(cap_path)
 
-    best_val_loss = float('inf')
+    best_val_metric = 0
 
     partitions = np.load(path_partitions, allow_pickle=True).item()
 
@@ -143,34 +161,40 @@ if __name__ == '__main__':
     metric = metrics_evaluation
 
     # Train
-    dataset_train = Data_word(data, partitions['train'], train=True)
+    dataset_train = Data_word_aug(data, partitions['train'], train=True)
     dataloader_train = torch.utils.data.DataLoader(dataset_train, **config["datasets"]["train"])
     # Val
-    dataset_valid = Data_word(data, partitions['valid'], train=False)
+    dataset_valid = Data_word_aug(data, partitions['valid'], train=False)
     dataloader_valid = torch.utils.data.DataLoader(dataset_valid, **config["datasets"]["valid"])
     # Test
-    dataset_test = Data_word(data, partitions['test'], train=False)
+    dataset_test = Data_word_aug(data, partitions['test'], train=False)
     dataloader_test = torch.utils.data.DataLoader(dataset_test, **config["datasets"]["test"])
     
-    model = Teacher_img_to_word_LSTM(TOTAL_MAX_WORDS, config['teacher_forcing_ratio'], device).to(device)
-
+    model = LSTM_attention(TOTAL_MAX_WORDS, **config["network"]["params"], device = device).to(device)
+    
+    
+    if config.get("freeze", None):
+        print("Freeze the model")
+        model.unfreeze_params(False)
+    model = nn.DataParallel(model)
     # load checkpoint
     # path = get_weights(config["weights_dir"])
     # if path is not None:
-    weights = os.listdir(config["weights_dir"])
-    if len(weights) > 0:
-        epoch_best = max([int(i.split('.')[0]) for i in weights])
-        model.load_state_dict(torch.load(f'{config["weights_dir"]}/{epoch_best}.pth'))
+    # weights = os.listdir(config["weights_dir"])
+    
+    # if len(weights) > 0:
+    #     epoch_best = max([int(i.split('.')[0]) for i in weights])
+    #     model.load_state_dict(torch.load(f'{config["weights_dir"]}/{epoch_best}.pth'))
 
-        # start_epoch = int(path.split('/')[-1].split('.')[0])
-        start_epoch = epoch_best
-        if config.get("wandb", False) and config["wandb"].get("resume", False):
-            wandb.init(project='Image_Captioning', config=config, name=args.test_name, resume=config["wandb"]["resume"], id=config["wandb"]["id"]) 
-        else:
-            wandb.init(project='Image_Captioning', config=config, name=args.test_name)
-    else: 
-        start_epoch = 0
-        wandb.init(project='Image_Captioning', config=config, name=args.test_name)
+    #     # start_epoch = int(path.split('/')[-1].split('.')[0])
+    #     start_epoch = epoch_best
+    #     if config.get("wandb", False) and config["wandb"].get("resume", False):
+    #         wandb.init(project='Image_Captioning', config=config, name=args.test_name, resume=config["wandb"]["resume"], id=config["wandb"]["id"]) 
+    #     else:
+    #         wandb.init(project='Image_Captioning', config=config, name=args.test_name)
+    # else: 
+    start_epoch = 0
+    wandb.init(project='Image_Captioning', config=config, name=args.test_name)
 
     wandb.watch(model)
     model.train()
@@ -188,22 +212,26 @@ if __name__ == '__main__':
         wandb.log({"Train": res, "Validation": res_v, "epoch":epoch+1}, step=(epoch+1)*len(dataloader_train)*config["datasets"]["train"]['batch_size'])
         squeduler.step()
         counter += 1
-        if loss_v < best_val_loss:
-            counter = 0
-            best_val_loss = loss_v
-            print("New best validation loss")
+        if epoch % config.get("save_every", 3) == 0:
             torch.save(model.state_dict(), f'{config["weights_dir"]}/{epoch}.pth')    
+        if res_v["meteor"] > best_val_metric:
+            counter = 0
+            best_val_loss = res_v["meteor"]
+            print("New best validation meteor")
+            torch.save(model.state_dict(), f'{config["root_dir"]}/best_meteor.pth') 
         if counter >= config["patience"]:
             break
 
-    weights = os.listdir(config["weights_dir"])
-    epoch_best = max([int(i.split('.')[0]) for i in weights])
+    # weights = os.listdir(config["weights_dir"])
+    # epoch_best = max([int(i.split('.')[0]) for i in weights])
     
     #epoch_best = weights[:-1].split('.')[0] # Tambe aixi val
 
-    model.load_state_dict(torch.load(f'{config["weights_dir"]}/{epoch_best}.pth'))
+    model.load_state_dict(torch.load(f'{config["weights_dir"]}/best_meteor.pth'))
     model.eval()
     loss_t, res_t = eval_epoch(model, crit, metric, dataloader_test, epoch="test")
     wandb.log({"Test Loss": loss_t, "Test": res_t}, step=(epoch+1)*len(dataloader_train)*config["datasets"]["train"]['batch_size'])
     print(f'Test loss: {loss_t:.2f}')
     print(f'Test: {res_t}')
+
+    wandb.finish()

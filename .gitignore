@@ -1,7 +1,12 @@
 src/Dataset/*
 *.pyc
 runs/*
+src/runs-baseline/*
 MSG_ERRORS/*
+per_si_acas/*
 wandb/*
 *.pth
-*.png
+*.pt
+
+src/Flickr/*
+archive.zip

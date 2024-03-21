@@ -7,11 +7,11 @@
 #SBATCH --mem 2048 # 2GB solicitados.
 #SBATCH -o %x_%u_%j.out # File to which STDOUT will be written
 #SBATCH -e %x_%u_%j.err # File to which STDERR will be written
-#SBATCH --gres gpu:1 # Para pedir gráficas
+#SBATCH --gres gpu:2 # Para pedir gráficas
 
 
 #python3 /fhome/gia07/Image_captioning/src/train.py --test_name $1
 #python3 /fhome/gia07/Image_captioning/src/train_word_pred.py --test_name $1
-python3 /fhome/gia07/Image_captioning/src/train_teacher_forcing.py --test_name $1
+python3 /fhome/gia07/Image_captioning/src/lstm_train.py --test_name $1
 #python3 /fhome/gia07/Image_captioning/src/train_tf.py --test_name $1
 # python3 /fhome/gia07/Image_captioning/src/gru_2_layers_tf.py --test_name $1

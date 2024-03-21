@@ -23,10 +23,11 @@ word2idx = {v: k for k, v in enumerate(unique_words)}
 TOTAL_MAX_WORDS = 38
 
 class Teacher_img_to_word_LSTM(nn.Module):
-    def __init__(self, TOTAL_MAX_WORDS, teacher_forcing_ratio, DEVICE):
+    def __init__(self, TOTAL_MAX_WORDS, teacher_forcing_ratio, DEVICE, dropout=0.1):
         super().__init__()
         self.resnet = ResNetModel.from_pretrained('microsoft/resnet-18').to(DEVICE)
         self.RNN = nn.LSTM(512, 512, num_layers=3)
+        self.dropout = nn.Dropout(dropout)
         self.proj = nn.Linear(512, NUM_WORDS)
         self.embed = nn.Embedding(NUM_WORDS, 512)
         self.word2idx = word2idx
@@ -49,7 +50,7 @@ class Teacher_img_to_word_LSTM(nn.Module):
 
         pred = inp
         for i in range(self.TOTAL_MAX_WORDS-1): # rm <SOS>
-            out, (_, _) = self.RNN(inp, (h0, c0)) # 1, batch, 512
+            out, (h0, c0) = self.RNN(inp, (h0, c0)) # 1, batch, 512
             # print("out", out.shape)
             pred = torch.cat((pred, out[-1:]), dim=0)
             if (ground_truth is not None) and (random.random() < self.teacher_forcing_ratio):
@@ -57,15 +58,18 @@ class Teacher_img_to_word_LSTM(nn.Module):
                 out = self.embed(out).unsqueeze(0) # 1, batch, 512
             else:
                 out = out.permute(1, 0, 2) # batch, seq, 512
+                out = self.dropout(out)
                 out = self.proj(out) # batch, seq,  NUM_WORDS
                 out = out.permute(1, 0, 2) # seq, batch, NUM_WORDS
                 _, out = out.max(2) # seq, batch
                 out = self.embed(out) # seq, batch, 512
+                out = self.dropout(out)
             
-            # inp = out
-            inp = torch.cat((inp, out[-1:]), dim=0) # N, batch, 512 # N es el numero de words que s'han predit (la longitud de la seq)
+            inp = out
+            # inp = torch.cat((inp, out[-1:]), dim=0) # N, batch, 512 # N es el numero de words que s'han predit (la longitud de la seq)
 
         res = pred.permute(1, 0, 2) # batch, seq, 512
+        res = self.dropout(res)
         # print("res", res.size())
         res = self.proj(res) # batch, seq,  NUM_WORDS
         # print("res", res.size())

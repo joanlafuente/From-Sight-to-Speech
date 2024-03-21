@@ -1,0 +1,13 @@
+#!/bin/bash
+#SBATCH -A atfg # Number of cores
+#SBATCH -n 2 # Number of cores
+#SBATCH -N 1 # Ensure that all cores are on one machine
+#SBATCH -D /fhome/gia07/Image_captioning/MSG_ERRORS # working directory
+#SBATCH -p tfg # Partition to submit to
+#SBATCH --mem 2048 # 2GB solicitados.
+#SBATCH -o %x_%j.out # File to which STDOUT will be written
+#SBATCH -e %x_%j.err # File to which STDERR will be written
+#SBATCH --gres gpu:1 # Para pedir gráficas
+
+# python3 /fhome/gia07/Image_captioning/src/bl_train_word.py --test_name $1
+python3 /fhome/gia07/Image_captioning/src/bl_train_chr.py --test_name $1
