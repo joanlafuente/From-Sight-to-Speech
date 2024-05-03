@@ -84,7 +84,7 @@ Extracting information from a trained FasterRCNN can be done in different ways, 
 <img src="Figures/Regions_LSTM.png" width="700" height="whatever" />
 
 ### FasterRCNN + Transformer Decoder
-<img src="Figures/Regions_Decoder_Detail.png" width="700" height="whatever" />
+<img src="Figures/Regions_Decoder_Detail.png" width="1100" height="whatever" />
 
 **Results**
 
