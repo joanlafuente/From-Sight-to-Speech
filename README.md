@@ -1,4 +1,4 @@
-# Image Captioning
+# From Sight to Speech: Exploring Image Captioning Landscapes
 
 [![Presentation](https://img.shields.io/badge/Presentation-Slides-blue)](https://www.canva.com/design/DAF3OjxilVM/UjIrXWGNdYWaYMHPjfb1Wg/view?utm_content=DAF3OjxilVM&utm_campaign=designshare&utm_medium=link&utm_source=editor)
 
@@ -38,7 +38,7 @@ We provide an ableation study testing different backbones, freezing or not the C
 
 <img src="Figures/Badhanau_Attention.png" width="800" height="whatever" />
 
-Attention can be done over the input, hidden or output vector. To see more details about this you can go to *
+Attention can be done over the input, hidden or output vector. We show some results using these 3 options.
 
 
 **Results**
@@ -93,3 +93,4 @@ Extracting information from a trained FasterRCNN can be done in different ways, 
 | FasterRCNN + LSTM | 53.64 | 30.29 | 36.45 | 32.16  |
 | FasterRCNN + Transformer Decoder | 56.20 | 29.82 | 37.29 | 22.79 |
 
+This information unveils a promising avenue in image captioning. Leveraging regions extracted from a FasterRCNN and passing them through specialized networks like LSTM or transformer decoders showcases the potential of detailed object-level understanding in generating captions. While these approaches yield notable improvements, it's noteworthy that they haven't surpassed the performance achieved by the VIT model. This suggests that while region-based approaches offer valuable insights, further exploration and refinement are needed to fully capitalize on their potential.
